@@ -6,6 +6,8 @@ var actuatorIn = 4;
 var heartsCut = 6;
 var tailsCut = 16;
 var arrayOfBeakers = [];
+var relayOn = true;
+var relayOff = false;
 
 // Helper functions
 function setOutputToBoolean(outputPosition, booleanValue){}
@@ -23,24 +25,24 @@ function wait(ms){
 function moveActuatorToPosition(positionNumber){
     switch (positionNumber){
         case 0:
-            setOutputToBoolean(actuatorIn,true);
+            setOutputToBoolean(actuatorIn,relayOn);
             wait(15*1000);
-            setOutputToBoolean(actuatorIn,false);
+            setOutputToBoolean(actuatorIn,relayOff);
         case 1:
-            setOutputToBoolean(actuatorOut,true);
+            setOutputToBoolean(actuatorOut,relayOn);
             wait(9*1000);
-            setOutputToBoolean(actuatorOut,false);
+            setOutputToBoolean(actuatorOut,relayOff);
         case 2:
-            setOutputToBoolean(actuatorOut,true);
+            setOutputToBoolean(actuatorOut,relayOn);
             wait(11*1000);
-            setOutputToBoolean(actuatorOut,false);
+            setOutputToBoolean(actuatorOut,relayOff);
     }
 }
 function runSolenoid(beaker){
     for (var i=0;i<beaker.cycleCount;i++){
-        setOutputToBoolean(solenoidRelay,true);
+        setOutputToBoolean(solenoidRelay,relayOn);
         wait(beaker.openTime);
-        setOutputToBoolean(solenoidRelay,false);
+        setOutputToBoolean(solenoidRelay,relayOff);
         wait(beaker.closeTime);
     }
 }
@@ -107,15 +109,15 @@ function getUserInput(){
 }
 
 function endTheRun(){
-    setOutputToBoolean(heatingElement,false);
+    setOutputToBoolean(heatingElement,relayOff);
     wait(120 * 1000);
-    setOutputToBoolean(solenoidRelay,true);
+    setOutputToBoolean(solenoidRelay,relayOn);
     wait(180*1000);
-    setOutputToBoolean(solenoidRelay,false);
+    setOutputToBoolean(solenoidRelay,relayOff);
     console.log("run ended at " + Date.now());
 }
 function preheatTheStill(){
-    setOutputToBoolean(heatingElement,true);
+    setOutputToBoolean(heatingElement,relayOn);
     while (readTemperature < 45){
         wait(60*1000);
     }
@@ -125,11 +127,13 @@ function runTheStill(){
     moveActuatorToPosition(0);
     preheatTheStill();
     for (var i = 0; i<arrayOfBeakers.length;i++){
+        // move actuator
         if (i == heartsCut){
             moveActuatorToPosition(1);
         } else if (i == tailsCut) {
             moveActuatorToPosition(2);
         }
+        // run the beaker
         runSolenoid(arrayOfBeakers[i]);
     }
 }
