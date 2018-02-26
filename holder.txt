@@ -1,0 +1,230 @@
+Private Sub fullAutomation_Click()
+Dim beakerArray(0 To 20, 0 To 3) As Variant
+    'second dimension: 0: cycleCount, 1: openTime,
+    '2: closeTime, 3: targetVolume
+
+Dim runHistory(0 To 10000, 0 To 2) As Variant
+    'second dimension: 0:time, 1:click count, 2: Temp
+Dim overallCycleCount As Integer
+Dim runHistoryCounter As Integer
+    
+    
+'Private Const ElementOne = 0
+'Private Const Valve = 1
+'Private Const ElementTwo = 2  'not alive yet
+'Private Const ActuatorPush = 3
+'Private Const ActuatorPull = 4
+'Private Const ActuatorMoveTime = 15000 '15 seconds
+
+'Dim myTextRange As String
+Dim totalVolume As Long
+Dim percEtOH As Double
+Dim volEtOH As Double
+Dim columnHeatTime As Integer
+Dim oneSecond As Long
+Dim volMeOH As Double
+Dim volHeads As Double
+Dim volHearts As Double
+Dim volTails As Double
+Dim collectionCorrection As Double
+collectionCorrection = 1.75     '18sep: changed to 1.75
+'02Sep changed back to 1.5 from 2.0; 02MAR Changed from 1.5
+'correction factor for still efficiency
+'2=twice the target volume will collect
+'e.g. formula expects 100ml * 100% etOH
+'2 will collect 200 mL
+Dim heartsCut As Integer
+Dim tailsCut As Integer
+Dim whichFraction As Integer
+Dim secondsToFunnelTwo As Double
+Dim secondstoFunnelThree As Double
+
+'MsgBox ("Make sure relay 3 has a red and white wire on both sides")
+'GET RECIPE PARAMETERS
+
+secondsToFunnelTwo = 9
+secondsToFunnelTwo = secondsToFunnelTwo * 1000
+secondstoFunnelThree = 11
+secondstoFunnelThree = secondstoFunnelThree * 1000
+
+'whichFraction = InputBox("Which fraction are we starting with? 0 = Methanol")
+'heartsCut = InputBox("Which fraction should be the first to include in hearts?")
+'tailsCut = InputBox("Which fraction should be the first to include in tails?")
+whichFraction = 0
+heartsCut = 6
+tailsCut = 16
+
+totalVolume = InputBox("What is the volume in Liters in the pot?") * 1000
+percEtOH = InputBox("What is the percent alcohol in the pot (enter 10 for 10%)")
+If percEtOH > 1 Then
+    percEtOH = percEtOH / 100
+End If
+'END RECIPE PARAMETERS
+
+'CLEAR OLD STUFF
+Sheets("Simple Recipe").Select
+Range("D1").ClearContents
+Range("B1:B10").ClearContents
+Range("A12:D36").ClearContents
+Range("B1") = whichFraction
+Range("B2") = heartsCut
+Range("B3") = tailsCut
+Range("B4") = Now
+'END CLEAR OLD STUFF
+
+'VOLUME CALCULATIONS
+    volEtOH = totalVolume * percEtOH
+    volMeOH = volEtOH * 0.03
+    volHeads = volEtOH * 0.05
+    volTails = volEtOH * 0.05
+    volHearts = volEtOH - (volMeOH + volHeads + volHearts)
+    
+    'fill array with target cycle counts, open/close time, and volumes
+    beakerArray(0, 3) = volMeOH '* collectionCorrection
+    For i = 1 To 3
+        beakerArray(i, 3) = volHeads / 3
+    Next i
+    For i = 4 To 17
+        beakerArray(i, 3) = volHearts * collectionCorrection / 14
+    Next i
+    For i = 18 To 20
+        beakerArray(i, 3) = volTails * collectionCorrection / 3
+    Next i
+    For i = 0 To 20
+        beakerArray(i, 0) = CInt(beakerArray(i, 3) / 3.32)
+        beakerArray(i, 1) = 500
+        Select Case i
+            Case Is <= 4
+                beakerArray(i, 2) = 3000
+            Case Is <= 10
+                beakerArray(i, 2) = 4000
+            Case Is <= 15
+                beakerArray(i, 2) = 6000
+            Case Else
+                beakerArray(i, 2) = 8000
+        End Select
+    Next i
+'END VOLUME CALCULATIONS
+
+'FILL IN TIMING TABLE
+    '0: cycleCount, 1: openTime,
+    '2: closeTime, 3: targetVolume
+
+    Range("A12").Select
+    For i = whichFraction To 20
+        ActiveCell = i  'fraction
+        ActiveCell.Offset(0, 1) = beakerArray(i, 3) 'volume
+        ActiveCell.Offset(0, 2) = beakerArray(i, 0) 'clicks
+        ActiveCell.Offset(0, 3) = (beakerArray(i, 1) + beakerArray(i, 2)) / 1000    'click duration
+        ActiveCell.Offset(0, 4).FormulaR1C1 = "=RC[-1]*RC[-2]/60"   'time for cycle
+        ActiveCell.Offset(1, 0).Select
+    Next i
+Range("F12") = Now   'put it to show total timing.  will refresh after preheat
+'END TIMING TABLE
+
+
+
+'START RECIPE
+oneSecond = 1000
+'MsgBox ("Hit OK.  THIS STARTS HEATING")
+Sheets("Simple Recipe").Select
+Range("B4") = Now
+Range("b4").Select
+Range("e3") = totalVolume
+Range("e4") = percEtOH
+
+'heat still
+phid.OutputState(0) = True 'turns on automatic element
+currentTemp = phidtemp.Temperature(0)
+maxTimeInSeconds = 240 * 60
+Range("h1").Value = "Preheat Start:"
+Range("i1").Value = Now
+
+Do Until currentTemp > 45
+    Range("g1").Value = currentTemp
+    currentTemp = phidtemp.Temperature(0)
+    Sleep 3000
+    secondCounter = secondCounter + 3
+    If secondCounter >= maxTimeInSeconds Then
+        Exit Do
+    End If
+    ActiveSheet.Calculate
+    DoEvents
+Loop
+Range("h2").Value = "Preheat End:"
+Range("i2").Value = Now
+
+sleepTime = 10 * 60
+For i = 1 To sleepTime
+    timeToSleep = 1000
+    Sleep timeToSleep
+Next i
+
+
+'end heat still
+
+
+
+Sheets("Simple Recipe").Select
+Range("B5") = Now
+Range("F12") = Now
+Range("B6").Select
+
+overallCycleCount = 0
+runHistoryCounter = 0
+    'second dimension: 0:time, 1:click count, 2: Temp
+
+For j = whichFraction To 20
+    Select Case j
+        Case Is = heartsCut
+            phid.OutputState(3) = True
+            Sleep secondsToFunnelTwo
+            phid.OutputState(3) = False
+        Case Is = tailsCut
+            phid.OutputState(3) = True
+            Sleep secondstoFunnelThree
+            phid.OutputState(3) = False
+    End Select
+    CycleCount = beakerArray(j, 0)
+        ActiveCell = j
+        ActiveCell.Offset(2, 0) = CycleCount
+        For i = 1 To CycleCount
+            ActiveCell.Offset(1, 0) = i
+            phid.OutputState(1) = True
+            overallCycleCount = overallCycleCount + 1
+            Sleep beakerArray(j, 1)
+            phid.OutputState(1) = False
+            Sleep beakerArray(j, 2)
+            If overallCycleCount Mod 10 = 0 Then
+                runHistory(runHistoryCounter, 0) = Now
+                runHistory(runHistoryCounter, 1) = overallCycleCount
+                currentTemp = phidtemp.Temperature(0)
+                runHistory(runHistoryCounter, 2) = currentTemp
+                runHistoryCounter = runHistoryCounter + 1
+                phid.OutputState(0) = True 'turns on automatic element
+                ActiveSheet.Calculate
+                DoEvents
+            End If
+        Next i
+Next j
+
+phid.OutputState(0) = False
+Sleep 120000
+phid.OutputState(1) = True
+Sleep 180000
+phid.OutputState(1) = False
+Range("k2").Select
+For i = 0 To 10000
+    ActiveCell = runHistory(i, 0)
+    ActiveCell.Offset(0, 1) = runHistory(i, 1)
+    ActiveCell.Offset(0, 2) = runHistory(i, 2)
+    ActiveCell.Offset(1, 0).Select
+Next i
+
+Range("D1").Select
+ActiveCell = "All done.  Go have a beer"
+MsgBox ("Fill in end of run information!")
+
+
+End Sub
+
